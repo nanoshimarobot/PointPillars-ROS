@@ -41,45 +41,46 @@
 * @date 2021/04/30
 */
 
-
 #pragma once
 
 // headers in STL
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <iostream>
-#include <sstream>
-#include <fstream>
 // headers in TensorRT
-#include "NvInfer.h"
-#include "NvOnnxParser.h"
+// #include "NvInfer.h"
+#include <NvInfer.h>
 
-#include <ros/ros.h>
+#include "NvOnnxParser.h"
 
 // headers in local files
 // #include "params.h"
-#include "common.h"
 #include <yaml-cpp/yaml.h>
-#include "pp_preprocess.h"
+
 #include "boolvfe.h"
-#include "pp_scatter.h"
+#include "common.h"
 #include "multi_head.h"
+#include "pp_preprocess.h"
+#include "pp_scatter.h"
 
 using namespace std;
 
 // Logger for TensorRT info/warning/errors
-class Logger : public nvinfer1::ILogger {
- public:
-  explicit Logger(Severity severity = Severity::kWARNING)
-      : reportable_severity(severity) {}
+class Logger : public nvinfer1::ILogger
+{
+public:
+  explicit Logger(Severity severity = Severity::kWARNING) : reportable_severity(severity) {}
 
-  void log(Severity severity, const char* msg) noexcept override {
+  void log(Severity severity, const char * msg) noexcept override
+  {
     // suppress messages with severity enum value greater than the reportable
     if (severity > reportable_severity) return;
 
@@ -106,179 +107,174 @@ class Logger : public nvinfer1::ILogger {
   Severity reportable_severity;
 };
 
+class PointPillars
+{
+private:
+  int VFENetType;
+  // initialize in initializer list
+  const float score_threshold_;
+  const float nms_overlap_threshold_;
+  const bool use_onnx_;
+  const std::string pfe_file_;
+  const std::string backbone_file_;
+  const std::string pp_config_;
+  // end initializer list
+  // voxel size
+  float kPillarXSize;
+  float kPillarYSize;
+  float kPillarZSize;
+  // point cloud range
+  float kMinXRange;
+  float kMinYRange;
+  float kMinZRange;
+  float kMaxXRange;
+  float kMaxYRange;
+  float kMaxZRange;
+  // hyper parameters
+  int kNumClass;
+  // int kMaxNumPoints;
+  int kMaxNumPillars;
+  int kMaxNumPointsPerPillar;
+  int kInputPointFeature;
+  int kNumPointFeature;
+  int kNumGatherPointFeature;
+  int kGridXSize;
+  int kGridYSize;
+  int kGridZSize;
+  int kNumAnchorXinds;
+  int kNumAnchorYinds;
+  int kRpnInputSize;
+  int kNumAnchor;
+  int kNumInputBoxFeature;
+  int kNumOutputBoxFeature;
+  int kRpnBoxOutputSize;
+  int kRpnClsOutputSize;
+  int kRpnDirOutputSize;
+  int kBatchSize;
+  int kNumIndsForScan;
+  int kNumThreads;
+  // if you change kNumThreads, need to modify NUM_THREADS_MACRO in
+  // common.h
+  int kNumBoxCorners;
+  int kNmsPreMaxsize;
+  int kNmsPostMaxsize;
+  //params for initialize anchors
+  //Adapt to OpenPCDet
+  int kAnchorStrides;
+  std::vector<float> kAnchorDxSizes;
+  std::vector<float> kAnchorDySizes;
+  std::vector<float> kAnchorDzSizes;
+  std::vector<float> kAnchorBottom;
+  std::vector<std::vector<int>> kMultiheadLabelMapping;
+  int kNumAnchorPerCls;
+  int host_pillar_count_[1];
 
+  // float* dev_points;
+  int * dev_x_coors_;
+  int * dev_y_coors_;
+  float * dev_num_points_per_pillar_;
+  int * dev_sparse_pillar_map_;
+  int * dev_cumsum_along_x_;
+  int * dev_cumsum_along_y_;
 
-class PointPillars {
- private:
-    int VFENetType;
-    // initialize in initializer list
-    const float score_threshold_;
-    const float nms_overlap_threshold_;
-    const bool use_onnx_;
-    const std::string pfe_file_;
-    const std::string backbone_file_;
-    const std::string pp_config_;
-    // end initializer list
-    // voxel size
-    float kPillarXSize;
-    float kPillarYSize;
-    float kPillarZSize;
-    // point cloud range
-    float kMinXRange;
-    float kMinYRange;
-    float kMinZRange;
-    float kMaxXRange;
-    float kMaxYRange;
-    float kMaxZRange;
-    // hyper parameters
-    int kNumClass;
-    // int kMaxNumPoints;
-    int kMaxNumPillars;
-    int kMaxNumPointsPerPillar;
-    int kInputPointFeature;
-    int kNumPointFeature;
-    int kNumGatherPointFeature;
-    int kGridXSize;
-    int kGridYSize;
-    int kGridZSize;
-    int kNumAnchorXinds;
-    int kNumAnchorYinds;
-    int kRpnInputSize;
-    int kNumAnchor;
-    int kNumInputBoxFeature;
-    int kNumOutputBoxFeature;
-    int kRpnBoxOutputSize;
-    int kRpnClsOutputSize;
-    int kRpnDirOutputSize;
-    int kBatchSize;
-    int kNumIndsForScan;
-    int kNumThreads;
-    // if you change kNumThreads, need to modify NUM_THREADS_MACRO in
-    // common.h
-    int kNumBoxCorners;
-    int kNmsPreMaxsize;
-    int kNmsPostMaxsize;
-    //params for initialize anchors
-    //Adapt to OpenPCDet
-    int kAnchorStrides;
-    std::vector<float> kAnchorDxSizes;
-    std::vector<float> kAnchorDySizes;
-    std::vector<float> kAnchorDzSizes;
-    std::vector<float> kAnchorBottom;
-    std::vector<std::vector<int>> kMultiheadLabelMapping;
-    int kNumAnchorPerCls;
-    int host_pillar_count_[1];
+  float * dev_pillar_point_feature_;
+  float * dev_pillar_coors_;
+  float * dev_points_mean_;
 
-    // float* dev_points;
-    int* dev_x_coors_;
-    int* dev_y_coors_;
-    float* dev_num_points_per_pillar_;
-    int* dev_sparse_pillar_map_;
-    int* dev_cumsum_along_x_;
-    int* dev_cumsum_along_y_;
+  float * dev_pfe_gather_feature_;
+  void * pfe_buffers_[2];
+  //variable for doPostprocessCudaMultiHead
+  void * rpn_buffers_[100];
 
-    float* dev_pillar_point_feature_;
-    float* dev_pillar_coors_;
-    float* dev_points_mean_;
+  std::vector<float *> rpn_box_output_;
+  std::vector<float *> rpn_cls_output_;
 
-    float* dev_pfe_gather_feature_;
-    void* pfe_buffers_[2];
-    //variable for doPostprocessCudaMultiHead
-    void* rpn_buffers_[100];
-    
-    std::vector<float*> rpn_box_output_; 
-    std::vector<float*> rpn_cls_output_;
+  float * dev_scattered_feature_;
 
-    float* dev_scattered_feature_;
+  float * host_box_;
+  float * host_score_;
+  int * host_filtered_count_;
 
-    float* host_box_;
-    float* host_score_;
-    int*   host_filtered_count_;
+  int kNumBevFeatures;
+  int kRPNHeadNum;
+  std::vector<int> kRPNClsPerHead;
+  std::vector<int> kRPNHeadCount;
+  std::vector<int> kRPNHeadStride0;
+  std::vector<int> kRPNHeadStride;
+  std::vector<int> kRPNHeadOffset;
+  int kRPNHeadSpaceCount;
 
-    int kNumBevFeatures;
-    int kRPNHeadNum;
-    std::vector<int> kRPNClsPerHead;
-    std::vector<int> kRPNHeadCount;
-    std::vector<int> kRPNHeadStride0;
-    std::vector<int> kRPNHeadStride;
-    std::vector<int> kRPNHeadOffset;
-    int kRPNHeadSpaceCount;
+  // float* dev_filtered_box_;
+  // float* dev_filtered_score_;
+  // int*   dev_filtered_label_;
+  // int*   dev_filtered_dir_;
+  // float* dev_box_for_nms_;
+  // int*   dev_filter_count_;
 
-    // float* dev_filtered_box_;
-    // float* dev_filtered_score_;
-    // int*   dev_filtered_label_;
-    // int*   dev_filtered_dir_;
-    // float* dev_box_for_nms_;
-    // int*   dev_filter_count_;
+  std::unique_ptr<PreprocessPointsCuda> pp_preprocess_points_cuda_ptr_;
+  std::unique_ptr<BoolVFECuda> boolvfe_cuda_ptr_;
+  std::unique_ptr<ScatterCuda> scatter_cuda_ptr_;
+  std::unique_ptr<PostprocessCuda> postprocess_cuda_ptr_;
 
-    std::unique_ptr<PreprocessPointsCuda> pp_preprocess_points_cuda_ptr_;
-    std::unique_ptr<BoolVFECuda> boolvfe_cuda_ptr_;
-    std::unique_ptr<ScatterCuda> scatter_cuda_ptr_;
-    std::unique_ptr<PostprocessCuda> postprocess_cuda_ptr_;
+  Logger g_logger_;
+  nvinfer1::ICudaEngine * pfe_engine_;
+  nvinfer1::ICudaEngine * backbone_engine_;
+  nvinfer1::IExecutionContext * pfe_context_;
+  nvinfer1::IExecutionContext * backbone_context_;
 
-    Logger g_logger_;
-    nvinfer1::ICudaEngine* pfe_engine_;
-    nvinfer1::ICudaEngine* backbone_engine_;
-    nvinfer1::IExecutionContext* pfe_context_;
-    nvinfer1::IExecutionContext* backbone_context_;
-
-    /**
+  /**
      * @brief Memory allocation for device memory
      * @details Called in the constructor
      */
-    void DeviceMemoryMalloc();
+  void DeviceMemoryMalloc();
 
-    /**
+  /**
      * @brief Memory set to 0 for device memory
      * @details Called in the doPPInference
      */
-    void SetDeviceMemoryToZero();
+  void SetDeviceMemoryToZero();
 
-    /**
+  /**
      * @brief Initializing paraments from pointpillars.yaml
      * @details Called in the constructor
      */
-    void InitParams();
-    /**
+  void InitParams();
+  /**
      * @brief Initializing TensorRT instances
      * @param[in] usr_onnx_ if true, parse ONNX 
      * @details Called in the constructor
      */
-    void InitTRT(const bool use_onnx, const int read_vfe);
-    /**
+  void InitTRT(const bool use_onnx, const int read_vfe);
+  /**
      * @brief Convert ONNX to TensorRT model
      * @param[in] model_file ONNX model file path
      * @param[out] engine_ptr TensorRT model engine made out of ONNX model
      * @details Load ONNX model, and convert it to TensorRT model
      */
-    void OnnxToTRTModel(const std::string& model_file,
-                        nvinfer1::ICudaEngine** engine_ptr);
+  void OnnxToTRTModel(const std::string & model_file, nvinfer1::ICudaEngine ** engine_ptr);
 
-    void EngineToTRTFile(const std::string &engine_file ,     
-                        nvinfer1::ICudaEngine** engine_ptr); 
+  void EngineToTRTFile(const std::string & engine_file, nvinfer1::ICudaEngine ** engine_ptr);
 
-    /**
+  /**
      * @brief Convert Engine to TensorRT model
      * @param[in] model_file Engine(TensorRT) model file path
      * @param[out] engine_ptr TensorRT model engine made 
      * @details Load Engine model, and convert it to TensorRT model
      */
-    void EngineToTRTModel(const std::string &engine_file ,     
-                        nvinfer1::ICudaEngine** engine_ptr) ;
+  void EngineToTRTModel(const std::string & engine_file, nvinfer1::ICudaEngine ** engine_ptr);
 
-    /**
+  /**
      * @brief Preproces points
      * @param[in] in_points_array Point cloud array
      * @param[in] in_num_points Number of points
      * @details Call CPU or GPU preprocess
      */
-    void Preprocess(const float* in_points_array, const int in_num_points);
+  void Preprocess(const float * in_points_array, const int in_num_points);
 
-    public:
+public:
+  std::vector<string> kAnchorNames;
 
-    std::vector<string> kAnchorNames;
-
-    /**
+  /**
      * @brief Constructor
      * @param[in] score_threshold Score threshold for filtering output
      * @param[in] nms_overlap_threshold IOU threshold for NMS
@@ -287,30 +283,20 @@ class PointPillars {
      * @param[in] backbone_file Region Proposal Network ONNX file path
      * @details Variables could be changed through point_pillars_detection
      */
-    PointPillars(const float score_threshold,
-                const float nms_overlap_threshold,
-                const bool use_onnx,
-                const std::string pfe_file,
-                const std::string backbone_file,
-                const std::string pp_config);
-    ~PointPillars();
+  PointPillars(
+    const float score_threshold, const float nms_overlap_threshold, const bool use_onnx,
+    const std::string pfe_file, const std::string backbone_file, const std::string pp_config);
+  ~PointPillars();
 
-    void doInference(const float* in_points_array,
-                    const int in_num_points,
-                    std::vector<float>* out_detections,
-                    std::vector<int>* out_labels,
-                    std::vector<float>* out_scores);
+  void doInference(
+    const float * in_points_array, const int in_num_points, std::vector<float> * out_detections,
+    std::vector<int> * out_labels, std::vector<float> * out_scores);
 
-    void doPPInference(const float* in_points_array,
-                    const int in_num_points,
-                    std::vector<float>* out_detections,
-                    std::vector<int>* out_labels,
-                    std::vector<float>* out_scores);
+  void doPPInference(
+    const float * in_points_array, const int in_num_points, std::vector<float> * out_detections,
+    std::vector<int> * out_labels, std::vector<float> * out_scores);
 
-    void doBMapInference(const float* in_points_array,
-                    const int in_num_points,
-                    std::vector<float>* out_detections,
-                    std::vector<int>* out_labels,
-                    std::vector<float>* out_scores);
+  void doBMapInference(
+    const float * in_points_array, const int in_num_points, std::vector<float> * out_detections,
+    std::vector<int> * out_labels, std::vector<float> * out_scores);
 };
-

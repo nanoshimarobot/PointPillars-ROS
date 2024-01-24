@@ -1,15 +1,13 @@
-cmake_minimum_required(VERSION 2.8.3)
-project(lidar_point_pillars)
+cmake_minimum_required(VERSION 3.8)
+project(point_pillars_ros)
 
+# set(CMAKE_MODULE_PATH ./build_flags/cmake)
 # set flags for CUDA availability
 option(CUDA_AVAIL "CUDA available" OFF)
 find_package(CUDA)
-find_package(build_flags REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
-AW_CHECK_CUDA()
-
-if (USE_CUDA)
+if (CUDA_FOUND)
   message("CUDA is available!")
   message("CUDA Libs: ${CUDA_LIBRARIES}")
   message("CUDA Headers: ${CUDA_INCLUDE_DIRS}")
@@ -57,106 +55,78 @@ else()
 endif()
 
 if(TRT_AVAIL AND CUDA_AVAIL AND CUDNN_AVAIL)
-  find_package(catkin REQUIRED COMPONENTS
-    roscpp
-    roslib
-    pcl_ros
-    autoware_msgs
-  )
-  set(CMAKE_CXX_STANDARD 11)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-
-  catkin_package(
-    INCLUDE_DIRS include
-    CATKIN_DEPENDS
-      roslib
-      pcl_ros
-      autoware_msgs
-  )
+  find_package(ament_cmake_auto REQUIRED)
+  find_package(PCL REQUIRED)
+  ament_auto_find_build_dependencies()
 
   include_directories(
-    include
-    ${catkin_INCLUDE_DIRS}
+    include/point_pillars_ros
+    ${CUDA_INCLUDE_DIRS}
     ${YAML_CPP_INCLUDE_DIRS}
   )
 
-  set(SOURCE_FILES
-    nodes/lidar_point_pillars_node.cpp
-    nodes/point_pillars_ros.cpp
+  ament_auto_add_library(point_pillars_lib SHARED
+    src/point_pillars.cpp
   )
 
-  add_executable(lidar_point_pillars
-    ${SOURCE_FILES}
-  )
-
-  add_dependencies(lidar_point_pillars
-    ${catkin_EXPORTED_TARGETS}
-  )
-
-
-  cuda_add_library(gpu_point_pillars_lib
-    nodes/pp_preprocess.cu
-    nodes/boolvfe.cu
-    # nodes/anchor_mask_cuda.cu
-    nodes/pp_scatter.cu
-    nodes/multi_head.cu
-    nodes/nms.cu
-  )
-
-  target_link_libraries(gpu_point_pillars_lib
-    ${CUDA_LIBRARIES}
-  )
-
-  add_library(point_pillars_lib
-    nodes/point_pillars.cpp
-    nodes/tracker.cpp
-    # nodes/preprocess_points.cpp
+  cuda_add_library(point_pillars_cuda_lib SHARED
+    src/boolvfe.cu
+    src/multi_head.cu
+    src/nms.cu
+    src/pp_preprocess.cu
+    src/pp_scatter.cu
   )
 
   target_link_libraries(point_pillars_lib
-    ${catkin_LIBRARIES}
     ${NVINFER}
     ${NVONNXPARSERS}
     ${CUDA_LIBRARIES}
-    ${CUDA_CUBLAS_LIBRARIES}
+    ${CUBLAS_LIBRARIES}
     ${CUDA_curand_LIBRARY}
     ${CUDNN_LIBRARY}
-    gpu_point_pillars_lib
     yaml-cpp
+    point_pillars_cuda_lib
   )
 
-  target_link_libraries(lidar_point_pillars
-    ${catkin_LIBRARIES}
-    point_pillars_lib
+  target_include_directories(point_pillars_lib
+    PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+      $<INSTALL_INTERFACE:include>
   )
 
+  target_include_directories(point_pillars_lib
+    SYSTEM PUBLIC
+      ${CUDA_INCLUDE_DIRS}
+  )
+
+  ament_auto_add_library(${PROJECT_NAME}_component SHARED
+    src/${PROJECT_NAME}_component.cpp
+  )
+  rclcpp_components_register_nodes(${PROJECT_NAME}_component "PointPillarsROS")
+  target_compile_options(${PROJECT_NAME}_component PUBLIC -Wall)
+  ament_auto_add_executable(${PROJECT_NAME} src/main.cpp)
+
+  target_include_directories(${PROJECT_NAME}_component PRIVATE ${PCL_INCLUDE_DIRS})
+  target_link_libraries(${PROJECT_NAME}_component ${PCL_LIBRARIES})
+  target_link_libraries(${PROJECT_NAME}_component point_pillars_lib)
+  target_compile_definitions(${PROJECT_NAME}_component PRIVATE ${PCL_DEFINITIONS})
+
+  ament_auto_package(
+    INSTALL_TO_SHARE
+    config
+  )
+  
   install(
-    TARGETS
-      gpu_point_pillars_lib
-      point_pillars_lib
-      lidar_point_pillars
-    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+    TARGETS point_pillars_cuda_lib
+    DESTINATION lib
   )
-
-  install(DIRECTORY launch/
-    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
-    PATTERN ".svn" EXCLUDE
-  )
-
-  install(DIRECTORY include/
-    DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}/${PROJECT_NAME}/
-    PATTERN ".svn" EXCLUDE
-  )
-
-  if (CATKIN_ENABLE_TESTING AND EXISTS /proc/driver/nvidia/)
-    find_package(rostest REQUIRED)
-    catkin_add_gtest(test-point_pillars test/src/pointpillars_test.cc)
-    target_link_libraries(test-point_pillars ${catkin_LIBRARIES} point_pillars_lib)
-  endif()
 else()
-  find_package(catkin REQUIRED)
-  catkin_package()
+  find_package(ament_cmake_auto REQUIRED)
+  ament_auto_find_build_dependencies()
+
+  ament_auto_package(
+    INSTALL_TO_SHARE
+      config
+  )
   message("PointPillars won't be built, CUDA and/or TensorRT were not found.")
 endif()
