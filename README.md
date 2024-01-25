@@ -1,88 +1,10 @@
-# PointPillars-ROS with BOOLMAP VFE
-A 3D detection Pointpillars ROS deployment on Nvidia Jetson TX1/TX2
-
-This repo implements https://github.com/hova88/PointPillars_MultiHead_40FPS into Autoware lidar_point_pillars framework https://github.com/autowarefoundation/autoware_ai_perception/tree/master/lidar_point_pillars.
-
-Also, a fast Voxel-Feature-Extractor named **boolmap** (refer to https://github.com/Livox-SDK/livox_detection) has been implemented into this repo.
-The BOOLMAP vfe is very sample to map the detection range into binary voxels.
-Also it DOES NOT need any deep feature parameters.
-Further, it can achieve almost the same precisions of LARGE objects, however, it loses some details of smaller objects.
-
-However, multihead 40FPS models is originally tested on 3080Ti. It takes about 700ms one frame on Nvidia TX1, while 140ms on Nvidia Xavier.
-And the boolmap vfe with same multihead backbone run 40ms+ on Xavier.
-
-I use [OpenPCDet](https://github.com/hova88/OpenPCDet) to train accelerated models.
-
-## Update 2022Dec
-
-We developed another boolmap-implemented repository (https://github.com/zzningxp/CUDA-PointPillars-Boolmap), which uses NVIDIA-CUDA specified acceleration from (https://github.com/NVIDIA-AI-IOT/CUDA-PointPillars).
-
-With this implemention, the backbone inference time can be accelerated from 42.7 ms to 15.1 ms.
-
-However, it has not be implemented into ROS framework. And it would be merged into this repository soon.
-
-## Update 2022Nov
-
-Boolmap vfe is implemented.
-`pointpillar_boolmap_multihead.yaml` can be used to RUN a boolmap model.
-The model has been evaluated in NUSCENES datasets, and the results are in the table below.
-
-## Update 2022Oct
-
-It NOW supports 11/10 gather-feature point-pillar models.
-11 gfeature model is trained by Nuscenes Data by OpenPCDet, which has 5 basic features. 
-10 gfeature model is trained by Kitti Data by OpenPCDet, which has 4 basic features.
-
-However, the INPUT feature numbers of both dataset are 5. 
-So, different models can deal with different input from rosbags.
-
-The post process of the original PointPillars_MultiHead_40FPS project, is **HARD CODED** some configuraion.
-
-1) Hard coded 10 heads in 6 groups, I change it to read from yaml.
-2) Hard coded feature_num of the pillar with 5, I change it to read from yaml (Kitti = 4, Nuscence = 5). 
-3) Hard coded gather_feature_num with 11, I change it to feature_num + 6.
-
-If you use kitti dataset to train a 11 gfeature model (you can add a refill zero dim into training procedure. While, I upload one sample model), you can use `pointpillar_kitti_g11.yaml` to infer this model.
-The differences of the yaml file is: `WITH_REFILL_DIM: True`
-
+# PointPillars-ROS for ROS 2
+Trying to use PointPillars-ROS in ROS 2 Humble
 # Requirements 
 ## My Environment 
-
-Ubuntu 18.04
-
-ROS Melodic
-
-### TX1
-```
-jetson_release
- - NVIDIA Jetson TX1
-   * Jetpack 4.5.1 [L4T 32.5.1]
-   * NV Power Mode: MAXN - Type: 0
-   * jetson_stats.service: active
- - Libraries:
-   * CUDA: 10.2.89
-   * cuDNN: 8.0.0.180
-   * TensorRT: 7.1.3.0
-   * Visionworks: 1.6.0.501
-   * OpenCV: 3.4.5 compiled CUDA: YES
-   * VPI: ii libnvvpi1 1.0.15 arm64 NVIDIA Vision Programming Interface library
-   * Vulkan: 1.2.70
-```
-### Xavier
-```
- - NVIDIA Jetson AGX Xavier [16GB]
-   * Jetpack 4.5.1 [L4T 32.5.1]
-   * NV Power Mode: MAXN - Type: 0
-   * jetson_stats.service: active
- - Libraries:
-   * CUDA: 10.2.89
-   * cuDNN: 8.0.0.180
-   * TensorRT: 7.1.3.0
-   * Visionworks: 1.6.0.501
-   * OpenCV: 3.4.5 compiled CUDA: YES
-   * VPI: ii libnvvpi1 1.0.12 arm64 NVIDIA Vision Programming Interface library
-   * Vulkan: 1.2.70
-```
+|OS|ROS DISTRO|CPU|GPU|RAM|
+|---|---|---|---|---|
+|Ubuntu22.04|ROS 2 Humble|Intel Core i9-12900K|GeForce RTX 4090|128GB|
 
 ## dependence
 Could not find the required component 'jsk_recognition_msgs'.
@@ -95,12 +17,9 @@ Need OpenCV compiled with CUDA.
 
 # Usage
 ## How to compile
-
-Simply, use catkin_make build up the whole project.
-
-Add project to runtime environment.
-```
-source devel/setup.bash
+```bash
+colcon build --symlink-install
+source install/local_setup.bash
 ```
 
 ## How to launch
