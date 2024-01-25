@@ -608,7 +608,9 @@ void PointPillars::doPPInference(
     dev_pfe_gather_feature_);
   cudaDeviceSynchronize();
   auto preprocess_end = std::chrono::high_resolution_clock::now();
-  // DEVICE_SAVE<float>(dev_pfe_gather_feature_,  kMaxNumPillars * kMaxNumPointsPerPillar * kNumGatherPointFeature  , "0_Model_pfe_input_gather_feature");
+  // DEVICE_SAVE<float>(
+  //   dev_pfe_gather_feature_, kMaxNumPillars * kMaxNumPointsPerPillar * kNumGatherPointFeature,
+  //   "0_Model_pfe_input_gather_feature", "/home/toyozoshimada/aist_intern2023_ros2_ws/pillars_log");
 
   // GPU_CHECK(cudaMemcpy(host_temp_space, dev_pfe_gather_feature_, 200000 * sizeof(float), cudaMemcpyDeviceToHost));
   // for (int i = 199800; i < 200000; i++)
@@ -616,20 +618,26 @@ void PointPillars::doPPInference(
   // cout << std::endl;
 
   // [STEP 3] : pfe forward
-  cudaStream_t stream;
-  GPU_CHECK(cudaStreamCreate(&stream));
+  // cudaStream_t stream;
+  // GPU_CHECK(cudaStreamCreate(&stream));
   auto pfe_start = std::chrono::high_resolution_clock::now();
-  GPU_CHECK(cudaMemcpyAsync(
+  GPU_CHECK(cudaMemcpy(
     pfe_buffers_[0], dev_pfe_gather_feature_,
-    kMaxNumPillars * kMaxNumPointsPerPillar * kNumGatherPointFeature *
-      sizeof(float),  ///kNumGatherPointFeature
-    cudaMemcpyDeviceToDevice, stream));
-  pfe_context_->enqueueV2(pfe_buffers_, stream, nullptr);
+    kMaxNumPillars * kMaxNumPointsPerPillar * kNumGatherPointFeature * sizeof(float),
+    cudaMemcpyDeviceToDevice));
+  // GPU_CHECK(cudaMemcpyAsync(
+  //   pfe_buffers_[0], dev_pfe_gather_feature_,
+  //   kMaxNumPillars * kMaxNumPointsPerPillar * kNumGatherPointFeature *
+  //     sizeof(float),  ///kNumGatherPointFeature
+  //   cudaMemcpyDeviceToDevice, stream));
+  // pfe_context_->enqueueV2(pfe_buffers_, stream, nullptr);
   cudaDeviceSynchronize();
   auto pfe_end = std::chrono::high_resolution_clock::now();
-  // DEVICE_SAVE<float>(reinterpret_cast<float*>(pfe_buffers_[1]),  kMaxNumPillars * 64 , "1_Model_pfe_output_buffers_[1]");
+  // DEVICE_SAVE<float>(
+  //   reinterpret_cast<float *>(pfe_buffers_[1]), kMaxNumPillars * 64,
+  //   "1_Model_pfe_output_buffers_[1]", "/home/toyozoshimada/aist_intern2023_ros2_ws/pillars_log");
 
-  // std::cout << "pillar_count " << host_pillar_count_[0] << std::endl;
+  std::cout << "pillar_count " << host_pillar_count_[0] << std::endl;
 
   // [STEP 4] : scatter pillar feature
   auto scatter_start = std::chrono::high_resolution_clock::now();
@@ -638,19 +646,28 @@ void PointPillars::doPPInference(
     dev_scattered_feature_);
   cudaDeviceSynchronize();
   auto scatter_end = std::chrono::high_resolution_clock::now();
-  // DEVICE_SAVE<float>(dev_scattered_feature_ ,  kRpnInputSize,"2_Model_backbone_input_dev_scattered_feature");
+  // DEVICE_SAVE<float>(
+  //   dev_scattered_feature_, kRpnInputSize, "2_Model_backbone_input_dev_scattered_feature",
+  //   "/home/toyozoshimada/aist_intern2023_ros2_ws/pillars_log");
 
   // GPU_CHECK(cudaMemcpy(host_temp_space, dev_scattered_feature_, 200000 * sizeof(float), cudaMemcpyDeviceToHost));
-  // for (int i = 199800; i < 200000; i++)
-  //     cout << host_temp_space[i] << " ";
-  // cout << std::endl;
+  // for (int i = 19980; i < 200000; i++)
+  //     std::cout << host_temp_space[i] << " ";
+  std::cout << "scattered feature size : " << sizeof(dev_scattered_feature_[0]) << std::endl;
+
+  std::cout << "backbone start" << std::endl;
 
   // [STEP 5] : backbone forward
   auto backbone_start = std::chrono::high_resolution_clock::now();
-  GPU_CHECK(cudaMemcpyAsync(
+  // cudaStream_t backbone_stream = nullptr;
+  // cudaStreamCreate(&backbone_stream);
+  // GPU_CHECK(cudaMemcpyAsync(
+  //   rpn_buffers_[0], dev_scattered_feature_, kBatchSize * kRpnInputSize * sizeof(float),
+  //   cudaMemcpyDeviceToDevice, backbone_stream));
+  // backbone_context_->enqueueV2(rpn_buffers_, backbone_stream, nullptr);
+  GPU_CHECK(cudaMemcpy(
     rpn_buffers_[0], dev_scattered_feature_, kBatchSize * kRpnInputSize * sizeof(float),
-    cudaMemcpyDeviceToDevice, stream));
-  backbone_context_->enqueueV2(rpn_buffers_, stream, nullptr);
+    cudaMemcpyDeviceToDevice));
   cudaDeviceSynchronize();
   auto backbone_end = std::chrono::high_resolution_clock::now();
   // std::cout << "backbone_context_->enqueueV2" << std::endl;
@@ -694,5 +711,5 @@ void PointPillars::doPPInference(
               << " ms" << resetiosflags(ios::left);  // << std::endl;
   }
   std::cout << std::endl;
-  cudaStreamDestroy(stream);
+  // cudaStreamDestroy(stream);
 }
